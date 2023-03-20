@@ -8,143 +8,177 @@
  */
 
 #include "game.h"
-#include <stdio.h>
-#include <stdlib.h>
 
-/** @brief An auxiliary structure which keeps the player number and the "color" of the field
- *  in the game_board (i.e. the number of calls of the game_move function).
- *  The maximum number of calls of the game_move function is the
- *  number of fields in game_board matrix (i.e. UINT64_MAX).
+/** @brief An auxiliary structure which keeps the player number and
+ * the "color" of the field in the game_board (i.e. the number
+ * of calls of the game_move function). The maximum number of calls
+ * of the game_move function is the number of fields in game_board
+ * matrix (i.e. UINT64_MAX).
  */
-typedef struct Pair{
+typedef struct Pair {
     uint32_t player_number;
     uint64_t color;
-}pair_t;
+} pair_t;
 
 /** @brief This structure represents the player information:
  * busy_fields     - the non negative number of occupied fields by
- * the player,
+ *                   the player,
  * busy_areas      - the non negative number of occupied aries by
- * the player (the precise definition of area could be found
- * in game.h file),
+ *                   the player (the precise definition of area
+ *                   could be found in game.h file),
  * boundary_length - the non negative number which represents
- * the length of the "boundary" of that player. In other words
- * this is the number of free to take fields by the player if the
- * the Player.busy_areas = game.max_areas (i.e. the player took
- * already all possibles areas but still can play putting figures
- * on the "boundary" of already existing connected fragment marked
- * by his number),
+ *                   the length of the "boundary" of that player.
+ *                   In other words this is the number of free
+ *                   to take fields by the player if
+ *                   Player.busy_areas = game.max_areas
+ *                   (i.e. the player took already all possibles
+ *                   areas but still can play putting figures on the
+ *                   "boundary" of already existing connected fragment marked
+ *                   by his number),
  * player_symbol   - symbol describing the player on the game board.
  */
-typedef struct Player{
+typedef struct Player {
     uint64_t busy_fields;
     uint64_t busy_areas;
     uint64_t boundary_length;
-    const char player_symbol;
-}player_t;
+    char player_symbol;
+} player_t;
 
 /** @brief This structure represents the whole game.
- * width - non negative number which describes the width of the game board,
- * height - non negative number which describes the height of the game board,
- * number_of_players - non negative number representing the number of players,
- * max_areas - non negative number representing the maximum of free to take
- * areas by each of the player,
- * game_board - the matrix representing game status,
- * all_players - the array of players. The number of the player is his index
- * in that array,
- * neighbors - helper array which holds the neighbors number and color
- * of some figure on game_board,
- * diff_neighbour_number - helper array which is the same as neighbours parameter
- * but holds only numbers of the neighbours,
- * fields_to_take - non negative number of free fields in the game_board.
+ * width                 - non negative number which describes the width
+ *                         of the game board,
+ * height                - non negative number which describes the height
+ *                         of the game board,
+ * number_of_players     - non negative number representing the number of players,
+ * max_areas             - non negative number representing the maximum
+ *                         of free to take areas by each of the player,
+ * game_board            - the matrix representing game status,
+ * all_players           - the array of players. The number
+ *                         of the player is his index in that array,
+ * diff_pair_neighbour   - helper array which holds the neighbors number and color
+ *                         of some figure on game_board,
+ * diff_neighbour_number - helper array which is the same as diff_pair_neighbour parameter
+ *                         but holds only numbers of the diff_pair_neighbour,
+ * busy_neighbour_fields - non negative number of occupied neighbour for some fixed
+ *                         coordinate (x,y) (i.e. integer from {0,...,4}),
+ * fields_to_take        - non negative number of free fields in the game_board.
  */
-struct game{
-    //HOW TO DO CONST IN NONSTATIC MEMBER?
+struct game {
     uint32_t width;
     uint32_t height;
     uint32_t number_of_players;
     uint64_t max_areas;
     pair_t** game_board;
     player_t* all_players;
-    pair_t* neighbours;
+    pair_t* diff_pair_neighbour;
     uint32_t* diff_neighbour_number;
+    uint64_t length_diff_neighbour_number; ///< length of diff_neighbour_number
+    uint64_t busy_neighbour_fields;
     uint64_t fields_to_take;
+    uint64_t potential_neighbour_number; ///< number of all "valid" neighbour coordinates
 };
 
 uint64_t global_counter = 1;
 
-/** Standard min function.
- * @param[in] x - first number,
- * @param[in] y - second number,
- * @return minimum of x and y.
- */
-static uint64_t min (uint64_t const x, uint64_t const y) {
-    if (x < y){
-        return x;
-    }
-
-    return y;
+static uint64_t min(uint64_t const x, uint64_t const y) {
+    return x <= y ? x : y;
 }
 
-game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t areas){
-    /**
-     * firstly check if the input is correct
-     */
+game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t areas) {
+     //firstly check if the input is correct
     if (width == 0 || height == 0 || players == 0 || areas == 0){
         return NULL;
     }
 
-    /**
-     * malloc / calloc all needed stuff for further work
-     */
     game_t* g = (game_t*)malloc(sizeof(game_t));
-    player_t* all_players = calloc(players, sizeof(player_t));
-    pair_t* neighbours = calloc(4, sizeof(pair_t));
-    uint32_t* diff_neighbour_number = calloc (4, sizeof(uint32_t));
-    if (!g || !all_players || !neighbours || diff_neighbour_number){
+
+    if(!g) {
         return NULL;
     }
 
-    /**
-     * calloc the matrix
-     */
+    player_t* all_players = calloc(players, sizeof(player_t));
+
+    if(!all_players) {
+        free(g);
+
+        return NULL;
+    }
+
+    pair_t* neighbours = calloc(4, sizeof(pair_t));
+
+    if(!neighbours) {
+      free(g);
+      free(all_players);
+
+      return NULL;
+    }
+
+    uint32_t* diff_neighbour_number = calloc(4, sizeof(uint32_t));
+
+    if(!diff_neighbour_number) {
+        free(g);
+        free(all_players);
+        free(neighbours);
+
+        return NULL;
+    }
+
+    for(uint32_t i = 0; i < players; i++) {
+       all_players[i].player_symbol = (char)i;
+    }
+
+    // dynamically alloc the matrix
     pair_t** game_board = calloc(width, sizeof(pair_t*));
 
-    if (!game_board){
+    if(!game_board) {
+        free(g);
+        free(all_players);
+        free(neighbours);
+        free(diff_neighbour_number);
+
         return NULL;
     }
 
-    for (uint32_t i = 0; i < height; i++){
+    for(uint32_t i = 0; i < width; i++) {
         game_board[i] = calloc(height, sizeof(pair_t));
 
-        if (!game_board[i]){
+        if(!game_board[i]) {
+            //firstly remove all created columns
+            for(int j = 0; j < i; j++) {
+                free(game_board[j]);
+            }
+
+            free(game_board);
+            free(g);
+            free(all_players);
+            free(neighbours);
+            free(diff_neighbour_number);
+
             return NULL;
         }
     }
 
-    /**
-     * the game creating
-     */
+    // The game creating
     g->width = width;
     g->height = height;
     g->number_of_players = players;
     g->max_areas = areas;
     g->game_board = game_board;
     g->all_players = all_players;
-    g->neighbours = neighbours;
+    g->diff_pair_neighbour = neighbours;
     g->diff_neighbour_number = diff_neighbour_number;
     g->fields_to_take = width * height;
 
     return g;
 }
 
-void game_delete(game_t *g){
+void game_delete(game_t *g) {
     if (!g){
-        free(g->neighbours);
+        free(g->diff_pair_neighbour);
         free(g->all_players);
         free(g->diff_neighbour_number);
 
-        for (uint32_t i = 0; i < g->width; i++){
+        for(uint32_t i = 0; i < g->width; i++){
             free(g->game_board[i]);
         }
 
@@ -153,27 +187,17 @@ void game_delete(game_t *g){
     }
 }
 
-/** @brief This function verifies if the player number is correct.
- *  Here we assume that the parameter g is not null.
- * @param[in] g               - pointer to the game structure,
- * @param[in] player_number   - number of the player,
- * @return true if the player number is correct and false otherwise.
- */
-static bool correct_player_number(game_t const* g, uint32_t const player_number){
-    if (player_number == 0 || player_number > g->number_of_players){
+// Returns true if the player_number is correct and false otherwise
+static bool correct_player_number(game_t const* g, uint32_t const player_number) {
+    if(player_number == 0 || player_number > g->number_of_players) {
         return false;
     }
 
     return true;
 }
 
-/** @brief This function verifies if the player occupies already all possible
- *  areas.
- * @param[in] g               - pointer to the game structure,
- * @param[in] player_number   - number of the player,
- * @return true if player has no free areas to take and false otherwise.
- */
-static bool player_took_all_areas(game_t const* g, uint32_t const player_number){
+// Returns true if the player occupied all possible aries and false otherwise
+static bool player_took_all_areas(game_t const* g, uint32_t const player_number) {
     if (g->all_players[player_number - 1].busy_areas == g->max_areas){
         return true;
     }
@@ -181,14 +205,8 @@ static bool player_took_all_areas(game_t const* g, uint32_t const player_number)
     return false;
 }
 
-/** @brief This function verifies the validity of coordinate (x,y).
- * @param[in] g - game structure pointer,
- * @param[in] x - column number,
- * @param[in] y - row number,
- * @return true if the coordinate (x,y) is valid (i.e. belongs to the
- * game board) and false otherwise.
- */
-static bool correct_coordinate(game_t const* g, uint32_t const x, uint32_t const y){
+// Returns true if the coordinate is valid and false otherwise
+static bool correct_coordinate(game_t const* g, uint32_t const x, uint32_t const y) {
     if (x >= g->width || y >= g->height){
         return false;
     }
@@ -196,32 +214,21 @@ static bool correct_coordinate(game_t const* g, uint32_t const x, uint32_t const
     return true;
 }
 
-/** @brief This function checks if the field is empty.
- * @param g  - pointer to the game structure,
- * @param x  - column number,
- * @param y  - row number,
- * @return true if coordinate (x,y) is empty and false
- * otherwise.
- */
-static bool empty_coordinate (game_t const* g, uint32_t const x, uint32_t const y){
-    if (g->game_board[x][y].player_number == 0){
+// Returns true if the coordinate (x,y) is already occupied and false otherwise
+static bool empty_coordinate(game_t const* g, uint32_t const x, uint32_t const y) {
+    if(g->game_board[x][y].player_number == 0) {
         return true;
     }
 
     return false;
 }
 
-/** @brief This is an additional function which adds the new pair
- * to the game.neighbors. If the copy is found the function is terminated.
- * @param[in] position       - technical parameter describing the number
- *                         of already added pairs,
- * @param[in] neighbours     -
- * @param[in] value_to_add
- */
-static void add_to_array (int* position, pair_t* neighbours, pair_t const value_to_add){
-    for (int i = 0; i < *position; i++){
-        if (neighbours[i].player_number == value_to_add.player_number &&
-                neighbours[i].color == value_to_add.color){
+// Helper function in update_structure procedure
+static void add_to_array(int* position, pair_t* neighbours, pair_t const value_to_add,
+                            uint64_t* length) {
+    for(int i = 0; i < *position; i++) {
+        if(neighbours[i].player_number == value_to_add.player_number &&
+           neighbours[i].color == value_to_add.color) {
             return;
         }
     }
@@ -229,89 +236,91 @@ static void add_to_array (int* position, pair_t* neighbours, pair_t const value_
     neighbours[*position].player_number = value_to_add.player_number;
     neighbours[*position].color = value_to_add.color;
     (*position)++;
+    (*length)++;
 }
 
-/** @brief modify game.neighbors to get all different direct
- *  neighbours of the coordinate (x,y). Value {0,0} denotes
- *  empty field.
- * @param[in] g  - pointer to the game structure,
- * @param x      - column number,
- * @param y      - row number.
- */
-static void different_direct_neighbours_pair(game_t const* g, uint32_t const x, uint32_t const y){
-    int position = 0;
+// update all auxilary members in g
+static void update_structure(game_t* g, uint32_t x, uint32_t y) {
+    uint64_t length_diff_pair_neighbour = 0;
+    uint64_t length_diff_neighbour_number = 0;
+    uint64_t busy_neighbour_fields = 0;
+    uint64_t potential_neighbour_number = 0;
     bool valid_right = correct_coordinate(g, x + 1, y);
     bool valid_left = correct_coordinate(g, x - 1, y);
     bool valid_down = correct_coordinate(g, x, y + 1);
     bool valid_up = correct_coordinate(g, x, y - 1);
+    int position = 0;
 
-    if (valid_right && !empty_coordinate(g, x, y)){
-        add_to_array(&position, g->neighbours, g->game_board[x + 1][y]);
-    }
-    if (valid_left){
-        add_to_array(&position, g->neighbours, g->game_board[x - 1][y]);
-    }
-    if (valid_down){
-        add_to_array(&position, g->neighbours, g->game_board[x][y + 1]);
-    }
-    if (valid_up){
-        add_to_array(&position, g->neighbours, g->game_board[x][y - 1]);
-    }
-}
+    // update the array diff_pair_neighbour and busy_neighbour_fields,
+    // update the length_diff_pair_neighbour
+    if(valid_right) {
+        potential_neighbour_number++;
 
-/** @brief This function is a technical function for getting different player numbers
- * from already filled neighbour array.
- * @param g - pointer to the game structure.
- */
-static void diff_neighbour_numbers(game_t const* g){
-    int i = 0;
-    int j = 0;
+        if(!empty_coordinate(g, x + 1, y)) {
+            busy_neighbour_fields++;
+            add_to_array(&position, g->diff_pair_neighbour,
+                         g->game_board[x + 1][y], &length_diff_pair_neighbour);
+        }
+    }
+    if(valid_left) {
+        potential_neighbour_number++;
 
-    while (i < 4 && g->neighbours[i].player_number != 0){
-        for (int z = 0; z < j; z++) {
-            if (g->neighbours[i].player_number == g->diff_neighbour_number[z]) {
-                i++;
-                continue;
+        if(!empty_coordinate(g, x - 1, y)) {
+            busy_neighbour_fields++;
+            add_to_array(&position, g->diff_pair_neighbour,
+                                 g->game_board[x - 1][y], &length_diff_pair_neighbour);
+        }
+    }
+    if(valid_up) {
+        potential_neighbour_number++;
+
+        if(!empty_coordinate(g, x, y - 1)) {
+            busy_neighbour_fields++;
+            add_to_array(&position, g->diff_pair_neighbour,
+                                 g->game_board[x][y - 1], &length_diff_pair_neighbour);
+        }
+    }
+    if(valid_down) {
+        potential_neighbour_number++;
+
+        if(!empty_coordinate(g, x, y + 1)) {
+            busy_neighbour_fields++;
+            add_to_array(&position, g->diff_pair_neighbour,
+                                 g->game_board[x][y + 1], &length_diff_pair_neighbour);
+        }
+    }
+
+    // update the g.diff_neighbour_numbers
+    bool copy;
+
+    for(int i = 0; i < length_diff_pair_neighbour; i++) {
+        copy = false;
+
+        for(int z = 0; z < length_diff_neighbour_number; z++) {
+            if(g->diff_pair_neighbour[i].player_number == g->diff_neighbour_number[z]) {
+                copy = true;
+                break;
             }
         }
-            g->diff_neighbour_number[j] = g->neighbours[i].player_number;
-            j++;
-            i++;
-    }
-}
 
-// returns the number of different neighbours
-static uint64_t number_of_different_neighbours (game_t const* g){
-    uint64_t i = 0;
-
-    while (i < 4 && g->diff_neighbour_number[i] != 0){
-        i++;
-    }
-
-    return i;
-}
-
-//returns the number of busy neighbours
-static uint64_t number_of_neighbors (game_t const* g){
-    uint64_t answer = 0;
-
-    for (int i = 0; i < 4; i++){
-        if (g->neighbours[i].player_number != 0){
-            answer++;
+        if(!copy) {
+            g->diff_neighbour_number[length_diff_neighbour_number] =
+                                        g->diff_pair_neighbour[i].player_number;
+            length_diff_neighbour_number++;
         }
     }
 
-    return answer;
+    g->length_diff_neighbour_number = length_diff_neighbour_number;
+    g->busy_neighbour_fields = busy_neighbour_fields;
+    g->potential_neighbour_number = potential_neighbour_number;
 }
 
-/** @brief This function checks if the player_number has himself in the
- *  neighbour array. In other words we check whether the game_move function
- *  creates the new area for the player or just stick to another fragment.
- * @param neighbours      - is the array of neighbours of the player,
- * @param player_number   - the player number
- * @return true if the array neighbours has player_number inside.
+/** @brief Checks if adding new figure generate new area.
+ * @param[in] neighbours      - is the array of diff_pair_neighbour of the player,
+ * @param[in] player_number   - the player number.
+ * @return true if adding creates the new area and false otherwise.
  */
-static bool boundary_adding(pair_t const* neighbours, uint32_t const player_number){
+static bool boundary_adding(pair_t const* neighbours, uint32_t const player_number) {
     int i = 0;
 
     while (neighbours[i].player_number != 0 && i < 4){
@@ -324,19 +333,19 @@ static bool boundary_adding(pair_t const* neighbours, uint32_t const player_numb
     return false;
 }
 
-/** @brief This function finds all empty neighbours of the player on position (x,y) and
- *  checks if the neighbour of the found empty field has the same number as our player.
- *  In other words this function returns the number of free fields neighbours of (x,y) which
- *  could not be added to a boundary length of the player on that position.
- * @param g               - pointer to the game structure,
- * @param x               - column number,
- * @param y               - row number,
- * @param player_number   - the number of the figure we put at (x,y) coordinate.
- * @return The number of empty neighbours of the (x,y) coordinate which has
- * in their own neighbours the player_number.
+/** @brief An auxilary function which analyses free neighbour cell
+ *  of the coordinate c := (x,y) and add one to the answer if that
+ *  field has its own neighbour (different that c) with the
+ *  same figure number as in c.
+ * @param[in] g               - pointer to the game structure,
+ * @param[in] x               - column number,
+ * @param[in] y               - row number,
+ * @param[in] player_number   - the number of the figure we put at (x,y) coordinate.
+ * @return The number of empty diff_pair_neighbour of the (x,y) coordinate which has
+ * in their own diff_pair_neighbour the player_number.
  */
-static uint64_t check_non_direct_neighbours (game_t const* g, uint32_t x,
-                                        uint32_t y, uint32_t player_number){
+static uint64_t check_non_direct_neighbours(game_t const* g, uint32_t x,
+                                             uint32_t y, uint32_t player_number) {
     uint64_t answer = 0;
     bool valid_left = correct_coordinate(g, x - 1, y);
     bool valid_right = correct_coordinate(g, x + 1, y);
@@ -354,8 +363,8 @@ static uint64_t check_non_direct_neighbours (game_t const* g, uint32_t x,
         technical3 = correct_coordinate(g, x - 1, y - 1);
 
         if (technical1 && g->game_board[x - 2][y].player_number == player_number ||
-                technical2 && g->game_board[x - 1][y + 1].player_number == player_number ||
-                 technical3 && g->game_board[x - 1][y - 1].player_number == player_number){
+            technical2 && g->game_board[x - 1][y + 1].player_number == player_number ||
+            technical3 && g->game_board[x - 1][y - 1].player_number == player_number){
             answer++;
         }
     }
@@ -365,8 +374,8 @@ static uint64_t check_non_direct_neighbours (game_t const* g, uint32_t x,
         technical3 = correct_coordinate(g, x + 1, y + 1);
 
         if (technical1 && g->game_board[x + 2][y].player_number == player_number ||
-                technical2 && g->game_board[x + 1][y - 1].player_number == player_number ||
-                 technical3 && g->game_board[x + 1][y + 1].player_number == player_number){
+            technical2 && g->game_board[x + 1][y - 1].player_number == player_number ||
+            technical3 && g->game_board[x + 1][y + 1].player_number == player_number){
             answer++;
         }
     }
@@ -376,8 +385,8 @@ static uint64_t check_non_direct_neighbours (game_t const* g, uint32_t x,
         technical3 = correct_coordinate(g, x + 1, y - 1);
 
         if (technical1 && g->game_board[x][y - 2].player_number == player_number ||
-                technical2 && g->game_board[x - 1][y - 1].player_number == player_number ||
-                 technical3 && g->game_board[x + 1][y - 1].player_number == player_number){
+            technical2 && g->game_board[x - 1][y - 1].player_number == player_number ||
+            technical3 && g->game_board[x + 1][y - 1].player_number == player_number){
             answer++;
         }
     }
@@ -387,223 +396,200 @@ static uint64_t check_non_direct_neighbours (game_t const* g, uint32_t x,
         technical3 = correct_coordinate(g, x + 1, y + 1);
 
         if (technical1 && g->game_board[x][y + 2].player_number == player_number ||
-                technical2 && g->game_board[x - 1][y + 1].player_number == player_number ||
-                 technical3 && g->game_board[x + 1][y + 1].player_number == player_number){
+            technical2 && g->game_board[x - 1][y + 1].player_number == player_number ||
+            technical3 && g->game_board[x + 1][y + 1].player_number == player_number){
             answer++;
         }
     }
-
     return answer;
 }
 
-/** @brief This procedure will reset neighbour and diff_neighbour_number
- * members to zero.
- * @param g - pointer on game structure.
- */
-static void set_to_zero (game_t* g){
+// Reset all auxilary data in game structure to zero
+static void set_to_zero (game_t* g) {
     for (int i = 0; i < 4; i++){
-        g->neighbours[i].player_number = 0;
-        g->neighbours[i].color = 0;
+        g->diff_pair_neighbour[i].player_number = 0;
+        g->diff_pair_neighbour[i].color = 0;
         g->diff_neighbour_number[i] = 0;
     }
 }
 
-/** @brief This function will find the minimum color in all direct
- * neighbours of player_number with (x,y) coordinate. Later on all
- * neighbour fragments with the same number will be (using DFS)
- * recolor on the min color.
+/** @brief This function finds the minimum color in all direct
+ * diff_pair_neighbour of player_number in (x,y) coordinate.
  * @param[in] g               - pointer on the game structure,
- * @param[in] x               - column number,
- * @param[in] y               - row number,
  * @param[in] player_number       - player number.
- * @return Min color of all direct neighbours with the same player_number.
+ * @return Min color of all direct g.diff_pair_neighbour with the same player_number.
  */
-static uint64_t find_min_color(game_t const* g, uint32_t x, uint32_t y, uint32_t player_number){
+static uint64_t find_min_color(game_t const* g, uint32_t player_number) {
     uint64_t answer = UINT64_MAX;
 
     for (int i = 0; i < 4; i++){
-        if (g->neighbours[i].player_number == player_number){
-            answer = min(answer, g->neighbours[i].color);
+        if (g->diff_pair_neighbour[i].player_number == player_number){
+            answer = min(answer, g->diff_pair_neighbour[i].color);
         }
     }
 
     return answer;
 }
 
-bool game_move(game_t* g, uint32_t player, uint32_t x, uint32_t y){
-    uint64_t number_of_diff_neighbours;
-    uint64_t number_of_neighbors; //not necessarily different
-
-    /**
-     * firstly verify the input
-     */
-     if (!g || !correct_player_number(g, player) || !correct_coordinate(g, x, y)){
-         return false;
+/** @brief This procedure will recolor all different blocks with the
+ * same player_number and different color to stick them together.
+ * @param[in] g          - pointer to the game structure,
+ * @param[in] x          - column number,
+ * @param[in] y          - row number,
+ * @param[in] min_color  - positive number representing the
+ *                         new color.
+ */
+static void BST(game_t* g, uint32_t x, uint32_t y, uint64_t const min_color,
+                    uint64_t const player_number) {
+     if(!correct_coordinate(g, x, y)) {
+         return;
      }
 
-     /**
-      * The field is already busy
-      */
-      if (g->game_board[x][y].player_number != 0){
-          return false;
-      }
-
-      /**
-       * Here the move is legal. We split next part of that
-       * function on two cases:
-       * (1) the move is "boundary" i.e. we just add the figure
-       * of the player to some area owned by the same player,
-       * (2) the move creates new area meaning there is no
-       * neighbours of (x,y) coordinate marked with number
-       * "player".
-       */
-    different_direct_neighbours_pair(g, x, y);
-    diff_neighbour_numbers(g);
-    number_of_diff_neighbours = number_of_different_neighbours(g);
-    number_of_neighbors = number_of_different_neighbours(g);
-
-    if (!boundary_adding(g->neighbours, player)){
-        /**
-         * The player can not create new area
-         */
-        if (player_took_all_areas(g, player)){
-            return false;
-        }
-
-        /**
-         * Firstly update me
-         */
-        g->all_players[player - 1].busy_areas++;
-        g->all_players[player - 1].busy_fields++;
-        g->all_players[player - 1].boundary_length += 4 - number_of_neighbors
-                                                        - check_non_direct_neighbours(g, x, y, player);
-
-        /**
-         * Update the game structure and the global_counter
-         */
-         g->game_board[x][y].player_number = player;
-         g->game_board[x][y].color = global_counter;
-         global_counter++;
-         g->fields_to_take--;
-
-         /**
-          * Update all non empty neighbours
-          */
-          uint32_t helper_variable;
-
-         for (int i = 0; i < number_of_diff_neighbours; i++){
-             helper_variable = g->diff_neighbour_number[i];
-             g->all_players[helper_variable - 1].boundary_length--;
-         }
-
-        set_to_zero(g);
-
-        return true;
-    }
-    else {
-        uint64_t min_color = find_min_color(g, x, y, player);
-        uint64_t fragments = 0;
-        bool valid_right = correct_coordinate(g, x + 1, y);
-        bool valid_left = correct_coordinate(g, x - 1, y);
-        bool valid_up = correct_coordinate(g, x, y - 1);
-        bool valid_down = correct_coordinate(g, x, y + 1);
-
-        /**
-         * Firstly find the number of the same neighbours
-         */
-         for (int i = 0; i < 4; i++){
-             if (g->neighbours[i].player_number == player){
-                 fragments++;
-             }
-         }
-
-        /**
-         * Update me
-         */
-        g->all_players[player - 1].busy_areas -= fragments - 1;
-        g->all_players[player - 1].busy_fields++;
-        g->all_players[player - 1].boundary_length += 4 - number_of_neighbors
-                                                      - check_non_direct_neighbours(g, x, y, player);
-
-        /**
-         * Update the game structure and the global_counter
-         */
-        g->game_board[x][y].player_number = player;
-        g->game_board[x][y].color = min_color;
-        global_counter++;
-
-
-        /**
-         * Update all neighbours with different figures
-         */
-         int local_index = 0;
-         uint32_t local_number;
-
-         while (local_index < 4 && g->diff_neighbour_number[local_index] != 0){
-             local_number = g->diff_neighbour_number[local_index];
-
-             if (local_number != player){
-                g->all_players[local_number - 1].boundary_length--;
-             }
-
-             local_index++;
-         }
-
-         /**
-          * Update all neighbours with the same number recoloring them
-          */
-          
-
-    }
+     if(g->game_board[x][y].player_number == player_number &&
+            g->game_board[x][y].color != min_color) {
+                g->game_board[x][y].color = min_color;
+                BST(g, x + 1, y, min_color, player_number);
+                BST(g, x - 1, y, min_color, player_number);
+                BST(g, x, y - 1, min_color, player_number);
+                BST(g, x, y + 1, min_color, player_number);
+     }
 
 }
 
-uint64_t game_busy_fields(game_t const* g, uint32_t player){
-    if (!g || !correct_player_number(g, player)){
+bool game_move(game_t* g, uint32_t player, uint32_t x, uint32_t y) {
+    //input verification
+    if(!g || !correct_player_number(g, player) || !correct_coordinate(g, x, y) ||
+                 g->game_board[x][y].player_number != 0) {
+        return false;
+    }
+
+    /**
+     * We split next part of that function on two cases:
+     * (1) the move is "boundary" i.e. adding the figure
+     * does not create new area,
+     * (2) the move creates new area
+     */
+    update_structure(g, x, y);
+
+    if(!boundary_adding(g->diff_pair_neighbour, player)) {
+        // The player can not create new area
+        if(player_took_all_areas(g, player)) {
+            return false;
+        }
+
+        // Update me
+        g->all_players[player - 1].busy_areas++;
+        g->all_players[player - 1].busy_fields++;
+        g->all_players[player - 1].boundary_length += g->potential_neighbour_number - g->busy_neighbour_fields
+                                                      - check_non_direct_neighbours(g, x, y, player);
+
+        // Update the game structure and the global_counter
+        g->game_board[x][y].player_number = player;
+        g->game_board[x][y].color = global_counter;
+        global_counter++;
+        g->fields_to_take--;
+
+        // Update all non empty diff_pair_neighbour
+        uint32_t helper_variable;
+
+        for(int i = 0; i < g->length_diff_neighbour_number; i++) {
+            helper_variable = g->diff_neighbour_number[i];
+            g->all_players[helper_variable - 1].boundary_length--;
+        }
+    }
+    else {
+        uint64_t min_color = find_min_color(g, player);
+        uint64_t fragments = 0;
+
+        // Firstly find the number of neighbours with the same number
+        for(int i = 0; i < 4; i++) {
+            if(g->diff_pair_neighbour[i].player_number == player) {
+                fragments++;
+            }
+        }
+
+        // Update me
+        g->all_players[player - 1].busy_areas -= fragments - 1;
+        g->all_players[player - 1].busy_fields++;
+        g->all_players[player - 1].boundary_length += g->potential_neighbour_number -
+                                                      g->busy_neighbour_fields -
+                                                      check_non_direct_neighbours(g, x, y, player);
+
+        // Update the game structure and the global_counter
+        g->game_board[x][y].player_number = player;
+        g->game_board[x][y].color = min_color;
+        global_counter++;
+        g->fields_to_take--;
+
+        // Update all diff_pair_neighbour with different figures
+        int z = 0;
+        uint32_t local_number;
+
+        while(z < 4 && g->diff_neighbour_number[z] != 0) {
+            local_number = g->diff_neighbour_number[z];
+            g->all_players[local_number - 1].boundary_length--;
+
+            z++;
+        }
+
+        // Update all diff_pair_neighbour with the same number recoloring them
+        BST(g, x + 1, y, min_color, player);
+        BST(g, x - 1, y, min_color, player);
+        BST(g, x, y - 1, min_color, player);
+        BST(g, x, y + 1, min_color, player);
+    }
+
+    set_to_zero(g);
+
+    return true;
+}
+
+uint64_t game_busy_fields(game_t const* g, uint32_t player) {
+    if(!g || !correct_player_number(g, player)) {
         return 0;
     }
 
     return g->all_players[player - 1].busy_fields;
 }
 
-uint64_t game_free_fields(game_t const* g, uint32_t player){
-    if (!g || correct_player_number(g, player)){
+uint64_t game_free_fields(game_t const* g, uint32_t player) {
+    if(!g || !correct_player_number(g, player)) {
         return 0;
     }
-    if (player_took_all_areas(g, player)){
+    if(player_took_all_areas(g, player)) {
         return g->all_players[player - 1].boundary_length;
     }
 
     return g->fields_to_take;
 }
 
-uint32_t game_board_width(game_t const *g){
-    if (!g){
+uint32_t game_board_width(game_t const *g) {
+    if(!g) {
         return 0;
     }
 
     return g->width;
 }
 
-uint32_t game_board_height(game_t const *g){
-    if (!g){
+uint32_t game_board_height(game_t const *g) {
+    if(!g) {
         return 0;
     }
 
     return g->height;
 }
 
-uint32_t game_players(game_t const *g){
-    if (!g){
+uint32_t game_players(game_t const *g) {
+    if(!g) {
         return 0;
     }
 
     return g->number_of_players;
 }
 
-char game_player(game_t const* g, uint32_t player){
-    if (!g || !correct_player_number(g, player)){
-        return ' ';
+char game_player(game_t const* g, uint32_t player) {
+    if(!g || !correct_player_number(g, player)) {
+        return '.';
     }
 
     return g->all_players[player - 1].player_symbol;
@@ -612,4 +598,8 @@ char game_player(game_t const* g, uint32_t player){
 //TO DO
 char* game_board(game_t const *g){
     return NULL;
+}
+
+uint64_t boundary_length(game_t const* g, uint32_t player){
+    return g->all_players[player - 1].boundary_length;
 }
