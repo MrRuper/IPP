@@ -158,6 +158,7 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
             return NULL;
         }
     }
+
     // The game creating
     g->width = width;
     g->height = height;
@@ -259,7 +260,7 @@ static void update_structure(game_t* g, uint32_t x, uint32_t y) {
         if (!empty_coordinate(g, x, y - 1)) {
             busy_neighbour_fields++;
             add_to_array(&position, g->diff_pair_neighbour,
-                         g->game_board[x][y - 1], &length_diff_pair_neighbour); //wciecia do pierwszego param
+                         g->game_board[x][y - 1], &length_diff_pair_neighbour);
         }
     }
     if (valid_down) {
@@ -346,7 +347,7 @@ static uint64_t check_non_direct_neighbours(game_t const* g, uint32_t x,
         technical3 = correct_coordinate(g, x - 1, y - 1);
 
         if ((technical1 && g->game_board[x - 2][y].player_number == player_number) ||
-            (technical2 && g->game_board[x - 1][y + 1].player_number == player_number) || //wzorcowka
+            (technical2 && g->game_board[x - 1][y + 1].player_number == player_number) ||
             (technical3 && g->game_board[x - 1][y - 1].player_number == player_number)) {
                 answer++;
         }
@@ -356,7 +357,7 @@ static uint64_t check_non_direct_neighbours(game_t const* g, uint32_t x,
             technical2 = correct_coordinate(g, x + 1, y - 1);
             technical3 = correct_coordinate(g, x + 1, y + 1);
 
-        if((technical1 && g->game_board[x + 2][y].player_number == player_number) ||
+        if ((technical1 && g->game_board[x + 2][y].player_number == player_number) ||
            (technical2 && g->game_board[x + 1][y - 1].player_number == player_number) ||
            (technical3 && g->game_board[x + 1][y + 1].player_number == player_number)) {
                 answer++;
