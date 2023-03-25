@@ -106,6 +106,10 @@ static void remove_struct(game_t* g, player_t* all_players,
     free(g);
 }
 
+static void set_to_NULL (game_t** g) {
+    *g = NULL;
+}
+
 game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t areas) {
      //Firstly check if the input is correct.
     if (width == 0 || height == 0 || players == 0 || areas == 0) {
@@ -182,7 +186,6 @@ void game_delete(game_t *g) {
         remove_struct(g, g->all_players, g->diff_pair_neighbour,
                       g->diff_neighbour_number, g->game_board,
                       g->width, true);
-        g = NULL; // Free function does not set g to NULL.
     }
 }
 
