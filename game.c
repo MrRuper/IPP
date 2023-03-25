@@ -106,10 +106,6 @@ static void remove_struct(game_t* g, player_t* all_players,
     free(g);
 }
 
-static void set_to_NULL (game_t** g) {
-    *g = NULL;
-}
-
 game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t areas) {
      //Firstly check if the input is correct.
     if (width == 0 || height == 0 || players == 0 || areas == 0) {
@@ -159,11 +155,9 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
         if (!game_board[i]) {
             remove_struct(g, all_players, diff_pair_neighbour,
                           diff_neighbour_number, game_board, i, true);
-
             return NULL;
         }
     }
-
     // The game creating
     g->width = width;
     g->height = height;
@@ -181,7 +175,7 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
     return g;
 }
 
-void game_delete(game_t *g) {
+void game_delete(game_t* g) {
     if (g) {
         remove_struct(g, g->all_players, g->diff_pair_neighbour,
                       g->diff_neighbour_number, g->game_board,

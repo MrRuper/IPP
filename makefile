@@ -7,9 +7,9 @@ LDFLAGS  =
 
 all: game
 
-game: main.o game.o
-main.o: main.c #zmienic na game_example!
-game.o: game.h game.c	
+game: game_example.o game.o
+game_example.o: game_example.c
+game.o: game.h game.c
 
 clean:
 	rm -f *.o game
