@@ -1,5 +1,5 @@
 #!/bin/bash
 gcc -Wall -Wextra -c game.h game.c
-gcc -Wall -Wextra -c main.c
-gcc -o game main.o game.o
+gcc -Wall -Wextra -c game_example.c
+gcc -o game game_example.o game.o
 valgrind --leak-check=full -q --error-exitcode=1 --track-origins=yes ./game
