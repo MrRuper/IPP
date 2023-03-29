@@ -42,6 +42,10 @@ typedef struct Player {
     char player_symbol;
 } player_t;
 
+#define max_neighbours 4 // Constant which describes the
+                        //  maximum number of the potential
+                        //  neighbours for some field.
+
 /** @brief This structure represents the whole game.
  * width                 - non negative number describing the width
  *                         of the game board,
@@ -66,8 +70,8 @@ struct game {
     uint32_t max_areas;
     pair_t** game_board;
     player_t* all_players;
-    pair_t* diff_pair_neighbour;
-    uint32_t* diff_neighbour_number;
+    pair_t diff_pair_neighbour[max_neighbours];
+    uint32_t diff_neighbour_number[max_neighbours];
     uint64_t length_diff_neighbour_number; ///< length of diff_neighbour_number
     uint64_t busy_neighbour_fields;
     uint64_t fields_to_take;
@@ -84,13 +88,9 @@ static uint64_t min(uint64_t const x, uint64_t const y) {
 // operation in game_new function in the case
 // of malloc fail.
 static void remove_struct(game_t* g, player_t* all_players,
-                          pair_t* diff_pair_neighbour,
-                          uint32_t* diff_neighbour_number,
                           pair_t** board, uint32_t i,
-                          char board_created) {
+                          bool board_created) {
     free(all_players);
-    free(diff_pair_neighbour);
-    free(diff_neighbour_number);
 
     if (board_created) {
         for (uint32_t j = 0; j < i; j++) {
@@ -114,20 +114,14 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
 
     game_t* g = NULL;
     player_t* all_players = NULL;
-    pair_t* diff_pair_neighbour = NULL;
-    uint32_t* diff_neighbour_number = NULL;
     pair_t** game_board = NULL;
 
-    g = (game_t*)malloc(sizeof(game_t));
+    g = calloc(1, sizeof(game_t));
     all_players = calloc(players, sizeof(player_t));
-    diff_pair_neighbour = calloc(4, sizeof(pair_t));
-    diff_neighbour_number = calloc(4, sizeof(uint32_t));
     game_board = calloc(width, sizeof(pair_t*));
 
-    if (!g || !all_players || !diff_neighbour_number ||
-        !diff_pair_neighbour || !game_board) {
-        remove_struct(g, all_players, diff_pair_neighbour,
-                      diff_neighbour_number, game_board, 0, false);
+    if (!g || !all_players || !game_board) {
+        remove_struct(g, all_players, game_board, 0, false);
 
         return NULL;
     }
@@ -153,8 +147,7 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
         game_board[i] = calloc(height, sizeof(pair_t));
 
         if (!game_board[i]) {
-            remove_struct(g, all_players, diff_pair_neighbour,
-                          diff_neighbour_number, game_board, i, true);
+            remove_struct(g, all_players, game_board, i, true);
             return NULL;
         }
     }
@@ -166,8 +159,6 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
     g->max_areas = areas;
     g->game_board = game_board;
     g->all_players = all_players;
-    g->diff_pair_neighbour = diff_pair_neighbour;
-    g->diff_neighbour_number = diff_neighbour_number;
     g->fields_to_take = (uint64_t)width * (uint64_t)height;
 
     // Always set global_counter to 1 when new_game is created.
@@ -178,8 +169,7 @@ game_t* game_new(uint32_t width, uint32_t height, uint32_t players, uint32_t are
 
 void game_delete(game_t* g) {
     if (g) {
-        remove_struct(g, g->all_players, g->diff_pair_neighbour,
-                      g->diff_neighbour_number, g->game_board,
+        remove_struct(g, g->all_players, g->game_board,
                       g->width, true);
     }
 }
