@@ -15,5 +15,5 @@ valgrind_test:
 	valgrind --leak-check=full -q --error-exitcode=1 --track-origins=yes ./game
 
 clean:
-	rm -f *.o game
+	rm -f *.o game_in_TUI_mode
  
